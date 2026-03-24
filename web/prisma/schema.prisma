@@ -1,0 +1,221 @@
+// Venue Menu — schema per BRD v3 + Auth.js
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ClaimTargetType {
+  ARTIST
+  VENUE
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MembershipRole {
+  OWNER
+  CONTRIBUTOR
+}
+
+/// LINEUP = created with the show; JOIN_REQUEST = artist asked to join (venue must accept).
+enum ShowArtistSource {
+  LINEUP
+  JOIN_REQUEST
+}
+
+/// NextAuth / Auth.js
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(uuid())
+  username      String?   @unique
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  passwordHash  String?
+  firstName     String?
+  lastName      String?
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  isDeleted     Boolean   @default(false)
+
+  accounts           Account[]
+  sessions           Session[]
+  showsCreated       Show[]               @relation("ShowCreatedBy")
+  claims             Claim[]
+  artistMemberships  ArtistMembership[]
+  venueMemberships   VenueMembership[]
+}
+
+model Artist {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  @db.Text
+  isClaimed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  isDeleted   Boolean  @default(false)
+
+  media        Media[]
+  showArtists  ShowArtist[]
+  memberships  ArtistMembership[]
+}
+
+model Venue {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  latitude  Float
+  longitude Float
+  isClaimed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  shows       Show[]
+  memberships VenueMembership[]
+
+  @@index([latitude, longitude])
+}
+
+model Show {
+  id                   String    @id @default(uuid())
+  venueId              String?
+  unlinkedVenueName    String?
+  unlinkedVenueAddress String?
+  date                 DateTime  @db.Date
+  startTime            String
+  endTime              String?
+  artistApproved       Boolean   @default(false)
+  venueApproved        Boolean   @default(false)
+  isVisible            Boolean   @default(true)
+  createdByUserId      String?
+  createdAt            DateTime  @default(now())
+  isDeleted            Boolean   @default(false)
+
+  venue         Venue?         @relation(fields: [venueId], references: [id])
+  createdByUser User?          @relation("ShowCreatedBy", fields: [createdByUserId], references: [id])
+  showArtists   ShowArtist[]
+
+  @@index([date, startTime])
+  @@index([venueId])
+}
+
+model ShowArtist {
+  id              String            @id @default(uuid())
+  showId          String
+  artistId        String
+  artistApproved  Boolean           @default(false)
+  source          ShowArtistSource  @default(LINEUP)
+  createdAt       DateTime          @default(now())
+  isDeleted       Boolean           @default(false)
+
+  show   Show   @relation(fields: [showId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id])
+
+  @@unique([showId, artistId])
+  @@index([artistId])
+  @@index([showId])
+}
+
+model Media {
+  id             String   @id @default(uuid())
+  artistId       String
+  youtubeUrl     String
+  youtubeVideoId String
+  title          String?
+  thumbnailUrl   String?
+  createdAt      DateTime @default(now())
+  isDeleted      Boolean  @default(false)
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+model Claim {
+  id          String          @id @default(uuid())
+  userId      String
+  targetId    String
+  targetType  ClaimTargetType
+  status      ClaimStatus     @default(PENDING)
+  createdAt   DateTime        @default(now())
+  isDeleted   Boolean         @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([targetType, targetId])
+  @@index([status])
+}
+
+model ArtistMembership {
+  id        String         @id @default(uuid())
+  userId    String
+  artistId  String
+  role      MembershipRole @default(CONTRIBUTOR)
+  createdAt DateTime       @default(now())
+  isDeleted Boolean        @default(false)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, artistId])
+}
+
+model VenueMembership {
+  id        String         @id @default(uuid())
+  userId    String
+  venueId   String
+  role      MembershipRole @default(CONTRIBUTOR)
+  createdAt DateTime       @default(now())
+  isDeleted Boolean        @default(false)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, venueId])
+}

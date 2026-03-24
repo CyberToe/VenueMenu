@@ -1,0 +1,211 @@
+
+BUSINESS REQUIREMENTS DOCUMENT (BRD) v3
+Project: Venue Menu
+Date: 2026-03-23
+
+=====================================
+1. EXECUTIVE SUMMARY
+=====================================
+Venue Menu is a location-based web application that enables users to discover local live music events by browsing venues and artists based on proximity, date, and time.
+
+Primary Goal:
+Enable users to discover artists playing nearby and attend events.
+
+Key Design Principles:
+- Discovery-first (no login required)
+- Decentralized data creation
+- Validation via show approvals only
+- Media via YouTube embedding only
+
+=====================================
+2. USER TYPES
+=====================================
+- Public User
+- Authenticated User
+- Owner
+- Contributor
+- Platform Admin
+
+=====================================
+3. CORE USER JOURNEYS
+=====================================
+
+3.1 Public Discovery
+- User lands on site
+- Clicks "Find Venue"
+- Inputs location/date/time
+- System returns venues with top 3–5 shows
+- User clicks venue or artist
+- Media plays inline (YouTube embed)
+
+3.2 Artist Creates Show (Linked)
+- Select venue
+- Create show
+- artist_approved = true
+- venue_approved = false
+- Hidden until venue approves
+
+3.3 Artist Creates Show (Unlinked)
+- Enter venue name + address
+- Visible immediately
+- Later linking triggers approval
+
+3.4 Venue Creates Show
+- Add artists (existing or new)
+- venue_approved = true
+- artist_approved = false
+
+3.5 Artist Joins Show
+- Requests to join
+- Venue must approve
+
+3.6 Claim Flow
+- User requests claim
+- Admin approves/rejects
+
+=====================================
+4. DATA MODEL (SQL-READY)
+=====================================
+
+Users:
+- id (UUID, PK)
+- username
+- password_hash
+- first_name
+- last_name
+- is_admin (boolean)
+- created_at
+- is_deleted
+
+Artists:
+- id (UUID, PK)
+- name
+- description
+- is_claimed
+- created_at
+- is_deleted
+
+Venues:
+- id (UUID, PK)
+- name
+- address
+- latitude
+- longitude
+- is_claimed
+- created_at
+- is_deleted
+
+Shows:
+- id (UUID, PK)
+- venue_id (FK, nullable)
+- unlinked_venue_name
+- unlinked_venue_address
+- date
+- start_time
+- end_time
+- artist_approved
+- venue_approved
+- is_visible
+- created_by_user_id
+- created_at
+- is_deleted
+
+Show_Artists:
+- id (UUID)
+- show_id (FK)
+- artist_id (FK)
+- artist_approved
+
+Media:
+- id (UUID)
+- artist_id (FK)
+- youtube_url
+- youtube_video_id
+- title
+- thumbnail_url
+
+Claims:
+- id
+- user_id
+- target_id
+- target_type
+- status
+
+=====================================
+5. SHOW STATE LOGIC
+=====================================
+
+Visibility Rules:
+- Unlinked → visible
+- Linked → requires approval
+- Fully approved → visible
+
+Creator auto-approves
+
+Linking:
+- Resets approval
+- Hides show until approved
+
+=====================================
+6. API SPECIFICATION (MVP)
+=====================================
+
+Auth:
+POST /api/auth/register
+POST /api/auth/login
+
+Artists:
+POST /api/artists
+GET /api/artists/:id
+POST /api/artists/:id/media
+
+Venues:
+POST /api/venues
+GET /api/venues/:id
+
+Shows:
+POST /api/shows
+GET /api/shows/search
+POST /api/shows/:id/approve
+POST /api/shows/:id/join
+
+Claims:
+POST /api/claims
+POST /api/claims/:id/approve
+
+Search:
+GET /api/search?lat=&lng=&date=
+
+=====================================
+7. SEARCH & GEO
+=====================================
+- Use PostGIS
+- Index:
+  - shows(date, start_time)
+  - venues(location)
+
+=====================================
+8. MEDIA (YOUTUBE ONLY)
+=====================================
+- Store YouTube URLs only
+- Extract video ID
+- Embed using iframe
+- No uploads
+
+=====================================
+9. TECH STACK
+=====================================
+- Vercel (Next.js)
+- Neon (Postgres)
+- Mapbox
+- Auth.js
+
+=====================================
+10. EDGE CASES
+=====================================
+- Linking resets approval
+- Removing artist/venue reverts to visible unlinked
+- Duplicate detection via fuzzy matching
+
+=====================================
+END OF DOCUMENT
